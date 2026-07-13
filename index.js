@@ -12,9 +12,6 @@ app.get("/", (req, res) => {
 const studentRouter = require("./routes/student");
 app.use("/api/v1/students", studentRouter);
 
-// ================= COURSES API =================
-
-// จำลองข้อมูลรายวิชา (Courses)
 let courses = [
   { id: 1, courseCode: "CS101", courseName: "Programming 101" },
   { id: 2, courseCode: "IT202", courseName: "Database Systems" }

@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 let students = [
-  { id: 1, name: "สมชาย ใจดี", major: "คณะวิทยาการคอมพิวเตอร์" },
+  { id: 1, name: "สมชาย ใจดี", major: "วิทยาการคอมพิวเตอร์" },
   {
     id: 2,
     name: "สมหญิง รักเรียน",
@@ -13,7 +13,7 @@ let nextId = 3;
 
 // GET /  (เทียบเท่ากับ /api/v1/students)
 router.get("/", (req, res) => {
-  res.status(200).json({ message: "Student API พร้อมใช้งาน" });
+  res.status(200).json({ message: "สำเร็จ", data: students });
 });
 // GET /:id  (เทียบเท่ากับ /api/v1/students/:id)
 router.get("/:id", (req, res) => {
@@ -38,7 +38,7 @@ router.post("/", (req, res) => {
     major,
   };
   students.push(newStudent);
-  return res.status(201).json({ message: "สำเร็จ", data: newStudent });
+  return res.status(201).json({ message: "เพิ่มข้อมูลสำเร็จ", data: newStudent });
 });
 // PUT /:id (เทียบเท่ากับ /api/v1/students/:id)
 router.put("/:id", (req, res) => {
@@ -57,7 +57,7 @@ router.put("/:id", (req, res) => {
 
   student.name = name;
   student.major = major;
-  return res.status(200).json({ message: "สำเร็จ", data: student });
+  return res.status(200).json({ message: "แก้ไขข้อมูลสำเร็จ", data: student });
 });
 // DELETE /:id (เทียบเท่ากับ /api/v1/students/:id)
 router.delete("/:id", (req, res) => {
