@@ -8,9 +8,124 @@ app.get("/", (req, res) => {
   res.status(200).json({ message: "Student API พร้อมใช้งาน" });
 });
 
-// นำเข้า router ของนักศึกษา
-const studentRouter = require("./routes/student");
-app.use("/api/v1/students", studentRouter);
+let students = [
+  {
+    id: 1,
+    name: "สมชาย ใจดี",
+    major: "วิทยาการคอมพิวเตอร์",
+    email: "somchai@example.com",
+    phone: "080-000-0001",
+    courseIds: [101, 102],
+  },
+  {
+    id: 2,
+    name: "สมหญิง รักเรียน",
+    major: "เทคโนโลยีสารสนเทศ",
+    email: "somying@example.com",
+    phone: "080-000-0002",
+    courseIds: [102],
+  },
+];
+
+let courses = [
+  { id: 101, courseName: "การเขียนโปรแกรมเบื้องต้น", credit: 3 },
+  { id: 102, courseName: "โครงสร้างข้อมูล", credit: 3 },
+];
+
+// === REST Endpoints สำหรับนักศึกษา ===
+
+// 1. GET /api/v1/students (ดึงรายการนักศึกษาทั้งหมด)
+app.get("/api/v1/students", (req, res) => {
+  res.status(200).json({ message: "สำเร็จ", data: students });
+});
+
+// 2. GET /api/v1/students/:id/full (ดึงข้อมูลนักศึกษาพร้อมวิชาลงทะเบียนตัวเต็ม)
+app.get("/api/v1/students/:id/full", (req, res) => {
+  const id = Number(req.params.id);
+  const student = students.find((s) => s.id === id);
+
+  if (!student) {
+    return res.status(404).json({ message: "ไม่พบข้อมูลนักศึกษา" });
+  }
+
+  const studentCourses = courses.filter((c) =>
+    student.courseIds.includes(c.id),
+  );
+
+  res.status(200).json({
+    message: "สำเร็จ",
+    data: { ...student, courses: studentCourses },
+  });
+});
+
+// 3. GET /api/v1/students/:id (ดึงข้อมูลนักศึกษารายบุคคล)
+app.get("/api/v1/students/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const student = students.find((s) => s.id === id);
+  if (!student) {
+    return res.status(404).json({ message: "ไม่พบข้อมูลนักศึกษา" });
+  }
+  return res.status(200).json({ message: "สำเร็จ", data: student });
+});
+
+// 4. POST /api/v1/students (เพิ่มนักศึกษาใหม่)
+app.post("/api/v1/students", (req, res) => {
+  const { name, major, email, phone, courseIds } = req.body;
+  if (!name || !major) {
+    return res
+      .status(400)
+      .json({ message: "กรุณาระบุ name และ major ให้ครบถ้วน" });
+  }
+  const newStudent = {
+    id: nextStudentId++,
+    name,
+    major,
+    email: email || "",
+    phone: phone || "",
+    courseIds: courseIds || [],
+  };
+  students.push(newStudent);
+  return res
+    .status(201)
+    .json({ message: "เพิ่มข้อมูลสำเร็จ", data: newStudent });
+});
+
+// 5. PUT /api/v1/students/:id (แก้ไขข้อมูลนักศึกษา)
+app.put("/api/v1/students/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const { name, major, email, phone, courseIds } = req.body;
+  const student = students.find((s) => s.id === id);
+  if (!student) {
+    return res.status(404).json({ message: "ไม่พบข้อมูลนักศึกษา" });
+  }
+
+  if (!name || !major) {
+    return res
+      .status(400)
+      .json({ message: "กรุณาระบุ name และ major ให้ครบถ้วน" });
+  }
+
+  student.name = name;
+  student.major = major;
+  if (email !== undefined) student.email = email;
+  if (phone !== undefined) student.phone = phone;
+  if (courseIds !== undefined) student.courseIds = courseIds;
+
+  return res.status(200).json({ message: "แก้ไขข้อมูลสำเร็จ", data: student });
+});
+
+// 6. DELETE /api/v1/students/:id (ลบข้อมูลนักศึกษา)
+app.delete("/api/v1/students/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const index = students.findIndex((s) => s.id === id);
+
+  if (index === -1) {
+    return res.status(404).json({ message: "ไม่พบข้อมูลนักศึกษา" });
+  }
+
+  students.splice(index, 1);
+  return res.status(200).json({ message: "ลบข้อมูลสำเร็จ" });
+});
 
 // นำเข้าและตั้งค่า GraphQL
 const { graphqlHTTP } = require("express-graphql");
@@ -23,80 +138,8 @@ app.use(
     schema: schema,
     rootValue: resolvers,
     graphiql: true,
-  })
+  }),
 );
-
-let courses = [
-  { id: 1, courseCode: "CS101", courseName: "Programming 101" },
-  { id: 2, courseCode: "IT202", courseName: "Database Systems" }
-];
-let nextCourseId = 3;
-
-// 1. GET /api/v1/courses (ดึงข้อมูลรายวิชาทั้งหมด)
-app.get("/api/v1/courses", (req, res) => {
-  res.status(200).json({ message: "สำเร็จ", data: courses });
-});
-
-// 2. GET /api/v1/courses/:id (ดึงข้อมูลรายวิชาตาม ID)
-app.get("/api/v1/courses/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const course = courses.find((c) => c.id === id);
-  
-  if (!course) {
-    return res.status(404).json({ message: "ไม่พบข้อมูลรายวิชา" });
-  }
-  return res.status(200).json({ message: "สำเร็จ", data: course });
-});
-
-// 3. POST /api/v1/courses (เพิ่มข้อมูลรายวิชาใหม่)
-app.post("/api/v1/courses", (req, res) => {
-  const { courseCode, courseName } = req.body;
-  
-  if (!courseCode || !courseName) {
-    return res.status(400).json({ message: "กรุณาระบุ courseCode และ courseName ให้ครบถ้วน" });
-  }
-  
-  const newCourse = {
-    id: nextCourseId++,
-    courseCode,
-    courseName,
-  };
-  
-  courses.push(newCourse);
-  return res.status(201).json({ message: "สร้างรายวิชาสำเร็จ", data: newCourse });
-});
-
-// 4. PUT /api/v1/courses/:id (แก้ไขข้อมูลรายวิชา)
-app.put("/api/v1/courses/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const { courseCode, courseName } = req.body;
-  const course = courses.find((c) => c.id === id);
-  
-  if (!course) {
-    return res.status(404).json({ message: "ไม่พบข้อมูลรายวิชา" });
-  }
-
-  if (!courseCode || !courseName) {
-    return res.status(400).json({ message: "กรุณาระบุ courseCode และ courseName ให้ครบถ้วน" });
-  }
-
-  course.courseCode = courseCode;
-  course.courseName = courseName;
-  return res.status(200).json({ message: "แก้ไขรายวิชาสำเร็จ", data: course });
-});
-
-// 5. DELETE /api/v1/courses/:id (ลบข้อมูลรายวิชา)
-app.delete("/api/v1/courses/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const index = courses.findIndex((c) => c.id === id);
-
-  if (index === -1) {
-    return res.status(404).json({ message: "ไม่พบข้อมูลรายวิชา" });
-  }
-
-  courses.splice(index, 1);
-  return res.status(200).json({ message: "ลบรายวิชาสำเร็จ" });
-});
 
 app.listen(port, () => {
   console.log(`Server กำลังทำงานที่ PORT ${port}`);
