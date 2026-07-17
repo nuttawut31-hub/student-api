@@ -12,6 +12,20 @@ app.get("/", (req, res) => {
 const studentRouter = require("./routes/student");
 app.use("/api/v1/students", studentRouter);
 
+// นำเข้าและตั้งค่า GraphQL
+const { graphqlHTTP } = require("express-graphql");
+const schema = require("./schema");
+const resolvers = require("./resolvers");
+
+app.use(
+  "/graphql",
+  graphqlHTTP({
+    schema: schema,
+    rootValue: resolvers,
+    graphiql: true,
+  })
+);
+
 let courses = [
   { id: 1, courseCode: "CS101", courseName: "Programming 101" },
   { id: 2, courseCode: "IT202", courseName: "Database Systems" }
