@@ -39,50 +39,59 @@ app.get("/api/v1/students", (req, res) => {
   res.status(200).json({ message: "สำเร็จ", data: students });
 });
 
-// 2. GET /api/v1/students/:id/full (ดึงข้อมูลนักศึกษาพร้อมวิชาลงทะเบียนตัวเต็ม)
-app.get("/api/v1/students/:id/full", (req, res) => {
-  const id = Number(req.params.id);
-  const student = students.find((s) => s.id === id);
-
-  if (!student) {
-    return res.status(404).json({ message: "ไม่พบข้อมูลนักศึกษา" });
-  }
-
-  const studentCourses = courses.filter((c) =>
-    student.courseIds.includes(c.id),
-  );
-
-  res.status(200).json({
-    message: "สำเร็จ",
-    data: { ...student, courses: studentCourses },
-  });
-});
-
-// 3. GET /api/v1/students/:id (ดึงข้อมูลนักศึกษารายบุคคล)
+// 2. GET /api/v1/students/:id (ดึงข้อมูลนักศึกษารายบุคคล รองรับ query parameter ?include=courses)
 app.get("/api/v1/students/:id", (req, res) => {
   const id = Number(req.params.id);
   const student = students.find((s) => s.id === id);
+
   if (!student) {
-    return res.status(404).json({ message: "ไม่พบข้อมูลนักศึกษา" });
+    return res.status(404).json({
+      error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลนักศึกษา" },
+    });
   }
-  return res.status(200).json({ message: "สำเร็จ", data: student });
+
+  const shouldIncludeCourses = req.query.include === "courses";
+
+  if (shouldIncludeCourses) {
+    const studentCourses = courses.filter((c) =>
+      student.courseIds.includes(c.id),
+    );
+    return res.status(200).json({
+      message: "สำเร็จ",
+      data: { ...student, courses: studentCourses },
+    });
+  }
+
+  res.status(200).json({ message: "สำเร็จ", data: student });
 });
 
 // 4. POST /api/v1/students (เพิ่มนักศึกษาใหม่)
 app.post("/api/v1/students", (req, res) => {
-  const { name, major, email, phone, courseIds } = req.body;
+  const { name, major, email } = req.body;
   if (!name || !major) {
-    return res
-      .status(400)
-      .json({ message: "กรุณาระบุ name และ major ให้ครบถ้วน" });
+    return res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "กรุณาระบุ name และ major ให้ครบถ้วน",
+      },
+    });
+  }
+  const duplicated = students.find((s) => s.email === email);
+  if (duplicated) {
+    return res.status(409).json({
+      error: {
+        code: "EMAIL_ALREADY_EXISTS",
+        message: "อีเมลนี้มีอยู่ในระบบอยู่แล้ว",
+      },
+    });
   }
   const newStudent = {
     id: nextStudentId++,
     name,
     major,
-    email: email || "",
-    phone: phone || "",
-    courseIds: courseIds || [],
+    // email: email || "",
+    // phone: phone || "",
+    // courseIds: courseIds || [],
   };
   students.push(newStudent);
   return res
@@ -112,6 +121,26 @@ app.put("/api/v1/students/:id", (req, res) => {
   if (courseIds !== undefined) student.courseIds = courseIds;
 
   return res.status(200).json({ message: "แก้ไขข้อมูลสำเร็จ", data: student });
+});
+
+// PATCH /api/v1/students/:id (แก้ไขข้อมูลนักศึกษาบางส่วน)
+app.patch("/api/v1/students/:id", (req, res) => {
+  const id = Number(req.params.id);
+  const student = students.find((s) => s.id === id);
+
+  if (!student) {
+    return res.status(404).json({
+      error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลนักศึกษา" },
+    });
+  }
+
+  // อัปเดตเฉพาะฟิลด์ที่ส่งมา ฟิลด์อื่นคงค่าเดิมไว้
+  const { name, major, email } = req.body;
+  if (name !== undefined) student.name = name;
+  if (major !== undefined) student.major = major;
+  if (email !== undefined) student.email = email;
+
+  res.status(200).json({ message: "แก้ไขข้อมูลสำเร็จ", data: student });
 });
 
 // 6. DELETE /api/v1/students/:id (ลบข้อมูลนักศึกษา)
