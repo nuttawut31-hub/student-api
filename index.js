@@ -31,6 +31,7 @@ let courses = [
   { id: 101, courseName: "การเขียนโปรแกรมเบื้องต้น", credit: 3 },
   { id: 102, courseName: "โครงสร้างข้อมูล", credit: 3 },
 ];
+let nextId = 3;
 
 // === REST Endpoints สำหรับนักศึกษา ===
 
@@ -54,7 +55,7 @@ app.get("/api/v1/students/:id", (req, res) => {
 
   if (shouldIncludeCourses) {
     const studentCourses = courses.filter((c) =>
-      student.courseIds.includes(c.id),
+      student.courseIds && student.courseIds.includes(c.id)
     );
     return res.status(200).json({
       message: "สำเร็จ",
@@ -65,33 +66,36 @@ app.get("/api/v1/students/:id", (req, res) => {
   res.status(200).json({ message: "สำเร็จ", data: student });
 });
 
-// 4. POST /api/v1/students (เพิ่มนักศึกษาใหม่)
+// 3. POST /api/v1/students (เพิ่มนักศึกษาใหม่)
 app.post("/api/v1/students", (req, res) => {
-  const { name, major, email } = req.body;
-  if (!name || !major) {
+  const { name, major, email, phone, courseIds } = req.body;
+
+  if (!name || !major || !email) {
     return res.status(400).json({
       error: {
         code: "VALIDATION_ERROR",
-        message: "กรุณาระบุ name และ major ให้ครบถ้วน",
+        message: "กรุณาระบุ name, major และ email ให้ครบถ้วน",
       },
     });
   }
+
   const duplicated = students.find((s) => s.email === email);
   if (duplicated) {
     return res.status(409).json({
       error: {
-        code: "EMAIL_ALREADY_EXISTS",
-        message: "อีเมลนี้มีอยู่ในระบบอยู่แล้ว",
+        code: "DUPLICATE_EMAIL",
+        message: "อีเมลนี้มีอยู่ในระบบแล้ว",
       },
     });
   }
+
   const newStudent = {
-    id: nextStudentId++,
+    id: nextId++,
     name,
     major,
-    // email: email || "",
-    // phone: phone || "",
-    // courseIds: courseIds || [],
+    email,
+    phone: phone || "",
+    courseIds: courseIds || [],
   };
   students.push(newStudent);
   return res
@@ -99,31 +103,38 @@ app.post("/api/v1/students", (req, res) => {
     .json({ message: "เพิ่มข้อมูลสำเร็จ", data: newStudent });
 });
 
-// 5. PUT /api/v1/students/:id (แก้ไขข้อมูลนักศึกษา)
+// 4. PUT /api/v1/students/:id (แก้ไขข้อมูลนักศึกษาทั้งระเบียน)
 app.put("/api/v1/students/:id", (req, res) => {
   const id = Number(req.params.id);
-  const { name, major, email, phone, courseIds } = req.body;
   const student = students.find((s) => s.id === id);
+
   if (!student) {
-    return res.status(404).json({ message: "ไม่พบข้อมูลนักศึกษา" });
+    return res.status(404).json({
+      error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลนักศึกษา" },
+    });
   }
 
-  if (!name || !major) {
-    return res
-      .status(400)
-      .json({ message: "กรุณาระบุ name และ major ให้ครบถ้วน" });
+  const { name, major, email, phone, courseIds } = req.body;
+
+  if (!name || !major || !email) {
+    return res.status(400).json({
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "กรุณาระบุ name, major และ email ให้ครบถ้วน",
+      },
+    });
   }
 
   student.name = name;
   student.major = major;
-  if (email !== undefined) student.email = email;
+  student.email = email;
   if (phone !== undefined) student.phone = phone;
   if (courseIds !== undefined) student.courseIds = courseIds;
 
   return res.status(200).json({ message: "แก้ไขข้อมูลสำเร็จ", data: student });
 });
 
-// PATCH /api/v1/students/:id (แก้ไขข้อมูลนักศึกษาบางส่วน)
+// 5. PATCH /api/v1/students/:id (แก้ไขข้อมูลนักศึกษาบางส่วน)
 app.patch("/api/v1/students/:id", (req, res) => {
   const id = Number(req.params.id);
   const student = students.find((s) => s.id === id);
@@ -135,10 +146,12 @@ app.patch("/api/v1/students/:id", (req, res) => {
   }
 
   // อัปเดตเฉพาะฟิลด์ที่ส่งมา ฟิลด์อื่นคงค่าเดิมไว้
-  const { name, major, email } = req.body;
+  const { name, major, email, phone, courseIds } = req.body;
   if (name !== undefined) student.name = name;
   if (major !== undefined) student.major = major;
   if (email !== undefined) student.email = email;
+  if (phone !== undefined) student.phone = phone;
+  if (courseIds !== undefined) student.courseIds = courseIds;
 
   res.status(200).json({ message: "แก้ไขข้อมูลสำเร็จ", data: student });
 });
@@ -149,7 +162,9 @@ app.delete("/api/v1/students/:id", (req, res) => {
   const index = students.findIndex((s) => s.id === id);
 
   if (index === -1) {
-    return res.status(404).json({ message: "ไม่พบข้อมูลนักศึกษา" });
+    return res.status(404).json({
+      error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลนักศึกษา" },
+    });
   }
 
   students.splice(index, 1);

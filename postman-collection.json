@@ -1,8 +1,8 @@
 {
   "info": {
     "_postman_id": "9e6c3704-88ab-40c7-ace4-c54a63a18a2d",
-    "name": "Student API - wk01",
-    "description": "Collection สำหรับทดสอบ Student API ในปฏิบัติการสัปดาห์ที่ 1 ครบทั้ง 6 กรณี",
+    "name": "Student API - wk03",
+    "description": "Collection สำหรับทดสอบ Student API ในปฏิบัติการสัปดาห์ที่ 3 (RESTful URI Schema, Status Codes, PATCH, และ ?include=courses)",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -28,7 +28,57 @@
       "response": []
     },
     {
-      "name": "2. เพิ่มข้อมูลนักศึกษาใหม่ (POST)",
+      "name": "2. ดึงข้อมูลนักศึกษารายบุคคล (GET by ID)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/v1/students/1",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "api",
+            "v1",
+            "students",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3. ดึงข้อมูลนักศึกษาพร้อมรายวิชา (GET by ID ?include=courses)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/v1/students/1?include=courses",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "api",
+            "v1",
+            "students",
+            "1"
+          ],
+          "query": [
+            {
+              "key": "include",
+              "value": "courses"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "4. เพิ่มข้อมูลนักศึกษาใหม่ (POST 201)",
       "request": {
         "method": "POST",
         "header": [
@@ -40,7 +90,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"วิชัย ตั้งใจเรียน\",\n  \"major\": \"วิศวกรรมซอฟต์แวร์\"\n}",
+          "raw": "{\n  \"name\": \"วิชัย ตั้งใจเรียน\",\n  \"major\": \"วิศวกรรมซอฟต์แวร์\",\n  \"email\": \"wichai@example.com\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -64,12 +114,27 @@
       "response": []
     },
     {
-      "name": "3. ดึงข้อมูลนักศึกษารายบุคคล (GET by ID)",
+      "name": "5. เพิ่มข้อมูลอีเมลซ้ำ (POST 409 Conflict)",
       "request": {
-        "method": "GET",
-        "header": [],
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"สมชาย ใจดี\",\n  \"major\": \"วิทยาการคอมพิวเตอร์\",\n  \"email\": \"somchai@example.com\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
         "url": {
-          "raw": "http://localhost:3000/api/v1/students/3",
+          "raw": "http://localhost:3000/api/v1/students",
           "protocol": "http",
           "host": [
             "localhost"
@@ -78,15 +143,50 @@
           "path": [
             "api",
             "v1",
-            "students",
-            "3"
+            "students"
           ]
         }
       },
       "response": []
     },
     {
-      "name": "4. แก้ไขข้อมูลนักศึกษา (PUT)",
+      "name": "6. เพิ่มข้อมูลไม่ครบถ้วน (POST 400 Bad Request)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"วิชัย ตั้งใจเรียน\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/v1/students",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "api",
+            "v1",
+            "students"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "7. แก้ไขข้อมูลแบบทั้งระเบียน (PUT 200)",
       "request": {
         "method": "PUT",
         "header": [
@@ -98,7 +198,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"วิชัย ตั้งใจเรียน\",\n  \"major\": \"วิทยาการข้อมูล\"\n}",
+          "raw": "{\n  \"name\": \"สมชาย ใจดีมาก\",\n  \"major\": \"วิทยาการคอมพิวเตอร์\",\n  \"email\": \"somchai@example.com\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -106,7 +206,7 @@
           }
         },
         "url": {
-          "raw": "http://localhost:3000/api/v1/students/3",
+          "raw": "http://localhost:3000/api/v1/students/1",
           "protocol": "http",
           "host": [
             "localhost"
@@ -116,19 +216,56 @@
             "api",
             "v1",
             "students",
-            "3"
+            "1"
           ]
         }
       },
       "response": []
     },
     {
-      "name": "5. ลบข้อมูลนักศึกษา (DELETE)",
+      "name": "8. แก้ไขข้อมูลบางส่วน (PATCH 200)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"major\": \"ปัญญาประดิษฐ์\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/v1/students/1",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "3000",
+          "path": [
+            "api",
+            "v1",
+            "students",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "9. ลบข้อมูลนักศึกษา (DELETE 200)",
       "request": {
         "method": "DELETE",
         "header": [],
         "url": {
-          "raw": "http://localhost:3000/api/v1/students/3",
+          "raw": "http://localhost:3000/api/v1/students/2",
           "protocol": "http",
           "host": [
             "localhost"
@@ -138,14 +275,14 @@
             "api",
             "v1",
             "students",
-            "3"
+            "2"
           ]
         }
       },
       "response": []
     },
     {
-      "name": "6. ทดสอบกรณีไม่พบข้อมูล (GET 404)",
+      "name": "10. ทดสอบกรณีไม่พบข้อมูล (GET 404)",
       "request": {
         "method": "GET",
         "header": [],
