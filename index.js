@@ -1,4 +1,5 @@
 require("dotenv").config();
+const pool = require("./db");
 
 const express = require("express");
 const helmet = require("helmet");
@@ -15,7 +16,7 @@ app.use(
   cors({
     origin: process.env.ALLOWED_ORIGIN,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-  })
+  }),
 );
 app.use(morgan("dev"));
 app.use(express.json({ limit: "10kb" }));
@@ -59,67 +60,62 @@ app.get("/", (req, res) => {
   res.status(200).json({ message: "Student API พร้อมใช้งาน" });
 });
 
-let students = [
-  {
-    id: 1,
-    name: "สมชาย ใจดี",
-    major: "วิทยาการคอมพิวเตอร์",
-    email: "somchai@example.com",
-    phone: "080-000-0001",
-    courseIds: [101, 102],
-  },
-  {
-    id: 2,
-    name: "สมหญิง รักเรียน",
-    major: "เทคโนโลยีสารสนเทศ",
-    email: "somying@example.com",
-    phone: "080-000-0002",
-    courseIds: [102],
-  },
-];
-
 let courses = [
   { id: 101, courseName: "การเขียนโปรแกรมเบื้องต้น", credit: 3 },
   { id: 102, courseName: "โครงสร้างข้อมูล", credit: 3 },
 ];
-let nextId = 3;
 
 // === REST Endpoints สำหรับนักศึกษา ===
 
 // 1. GET /api/v1/students (ดึงรายการนักศึกษาทั้งหมด)
-app.get("/api/v1/students", (req, res) => {
-  res.status(200).json({ message: "สำเร็จ", data: students });
+app.get("/api/v1/students", async (req, res, next) => {
+  try {
+    const [rows] = await pool.query("SELECT * FROM students");
+    res.status(200).json({ message: "สำเร็จ", data: rows });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // 2. GET /api/v1/students/:id (ดึงข้อมูลนักศึกษารายบุคคล รองรับ query parameter ?include=courses)
-app.get("/api/v1/students/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const student = students.find((s) => s.id === id);
+app.get("/api/v1/students/:id", async (req, res, next) => {
+  try {
+    const [rows] = await pool.query("SELECT * FROM students WHERE id = ?", [
+      req.params.id,
+    ]);
 
-  if (!student) {
-    return res.status(404).json({
-      error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลนักศึกษา" },
-    });
+    if (rows.length === 0) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลนักศึกษา" },
+      });
+    }
+
+    const student = rows[0];
+    const shouldIncludeCourses = req.query.include === "courses";
+
+    if (shouldIncludeCourses) {
+      const [courses] = await pool.query(
+        `SELECT c.id, c.course_name AS courseName, c.credit 
+         FROM courses c
+         JOIN enrollments e ON c.id = e.course_id
+         WHERE e.student_id = ?`,
+        [req.params.id],
+      );
+      return res.status(200).json({
+        message: "สำเร็จ",
+        data: { ...student, courses },
+      });
+    }
+
+    res.status(200).json({ message: "สำเร็จ", data: student });
+  } catch (err) {
+    next(err);
   }
-
-  const shouldIncludeCourses = req.query.include === "courses";
-
-  if (shouldIncludeCourses) {
-    const studentCourses = courses.filter((c) =>
-      student.courseIds && student.courseIds.includes(c.id)
-    );
-    return res.status(200).json({
-      message: "สำเร็จ",
-      data: { ...student, courses: studentCourses },
-    });
-  }
-
-  res.status(200).json({ message: "สำเร็จ", data: student });
 });
 
 // 3. POST /api/v1/students (เพิ่มนักศึกษาใหม่)
-app.post("/api/v1/students", createStudentLimiter, (req, res) => {
-  const { name, major, email, phone, courseIds } = req.body;
+app.post("/api/v1/students", createStudentLimiter, async (req, res, next) => {
+  const { name, major, email } = req.body;
 
   if (!name || !major || !email) {
     return res.status(400).json({
@@ -130,7 +126,6 @@ app.post("/api/v1/students", createStudentLimiter, (req, res) => {
     });
   }
 
-  // แบบฝึกหัดที่ 3: ปรับปรุง route POST /api/v1/students ให้ปฏิเสธคำขอที่ name มีความยาวเกิน 100 ตัวอักษร
   if (typeof name === "string" && name.length > 100) {
     return res.status(400).json({
       error: {
@@ -140,42 +135,29 @@ app.post("/api/v1/students", createStudentLimiter, (req, res) => {
     });
   }
 
-  const duplicated = students.find((s) => s.email === email);
-  if (duplicated) {
-    return res.status(409).json({
-      error: {
-        code: "DUPLICATE_EMAIL",
-        message: "อีเมลนี้มีอยู่ในระบบแล้ว",
-      },
+  try {
+    const [result] = await pool.query(
+      "INSERT INTO students (name, major, email) VALUES (?, ?, ?)",
+      [name, major, email],
+    );
+    res.status(201).json({
+      message: "เพิ่มข้อมูลสำเร็จ",
+      data: { id: result.insertId, name, major, email },
     });
+  } catch (err) {
+    if (err.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        error: { code: "DUPLICATE_EMAIL", message: "อีเมลนี้มีอยู่ในระบบแล้ว" },
+      });
+    }
+    next(err);
   }
-
-  const newStudent = {
-    id: nextId++,
-    name,
-    major,
-    email,
-    phone: phone || "",
-    courseIds: courseIds || [],
-  };
-  students.push(newStudent);
-  return res
-    .status(201)
-    .json({ message: "เพิ่มข้อมูลสำเร็จ", data: newStudent });
 });
 
 // 4. PUT /api/v1/students/:id (แก้ไขข้อมูลนักศึกษาทั้งระเบียน)
-app.put("/api/v1/students/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const student = students.find((s) => s.id === id);
-
-  if (!student) {
-    return res.status(404).json({
-      error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลนักศึกษา" },
-    });
-  }
-
-  const { name, major, email, phone, courseIds } = req.body;
+app.put("/api/v1/students/:id", async (req, res, next) => {
+  const id = req.params.id;
+  const { name, major, email } = req.body;
 
   if (!name || !major || !email) {
     return res.status(400).json({
@@ -186,49 +168,145 @@ app.put("/api/v1/students/:id", (req, res) => {
     });
   }
 
-  student.name = name;
-  student.major = major;
-  student.email = email;
-  if (phone !== undefined) student.phone = phone;
-  if (courseIds !== undefined) student.courseIds = courseIds;
+  try {
+    const [result] = await pool.query(
+      "UPDATE students SET name = ?, major = ?, email = ? WHERE id = ?",
+      [name, major, email, id],
+    );
 
-  return res.status(200).json({ message: "แก้ไขข้อมูลสำเร็จ", data: student });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลนักศึกษา" },
+      });
+    }
+
+    res.status(200).json({
+      message: "แก้ไขข้อมูลสำเร็จ",
+      data: { id: Number(id), name, major, email },
+    });
+  } catch (err) {
+    if (err.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        error: { code: "DUPLICATE_EMAIL", message: "อีเมลนี้มีอยู่ในระบบแล้ว" },
+      });
+    }
+    next(err);
+  }
 });
 
 // 5. PATCH /api/v1/students/:id (แก้ไขข้อมูลนักศึกษาบางส่วน)
-app.patch("/api/v1/students/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const student = students.find((s) => s.id === id);
+app.patch("/api/v1/students/:id", async (req, res, next) => {
+  const id = req.params.id;
+  const { name, major, email } = req.body;
 
-  if (!student) {
-    return res.status(404).json({
-      error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลนักศึกษา" },
+  try {
+    const [rows] = await pool.query("SELECT * FROM students WHERE id = ?", [
+      id,
+    ]);
+    if (rows.length === 0) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลนักศึกษา" },
+      });
+    }
+
+    const current = rows[0];
+    const newName = name !== undefined ? name : current.name;
+    const newMajor = major !== undefined ? major : current.major;
+    const newEmail = email !== undefined ? email : current.email;
+
+    await pool.query(
+      "UPDATE students SET name = ?, major = ?, email = ? WHERE id = ?",
+      [newName, newMajor, newEmail, id],
+    );
+
+    res.status(200).json({
+      message: "แก้ไขข้อมูลสำเร็จ",
+      data: { id: Number(id), name: newName, major: newMajor, email: newEmail },
     });
+  } catch (err) {
+    if (err.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        error: { code: "DUPLICATE_EMAIL", message: "อีเมลนี้มีอยู่ในระบบแล้ว" },
+      });
+    }
+    next(err);
   }
-
-  const { name, major, email, phone, courseIds } = req.body;
-  if (name !== undefined) student.name = name;
-  if (major !== undefined) student.major = major;
-  if (email !== undefined) student.email = email;
-  if (phone !== undefined) student.phone = phone;
-  if (courseIds !== undefined) student.courseIds = courseIds;
-
-  res.status(200).json({ message: "แก้ไขข้อมูลสำเร็จ", data: student });
 });
 
 // 6. DELETE /api/v1/students/:id (ลบข้อมูลนักศึกษา)
-app.delete("/api/v1/students/:id", (req, res) => {
-  const id = Number(req.params.id);
-  const index = students.findIndex((s) => s.id === id);
+app.delete("/api/v1/students/:id", async (req, res, next) => {
+  const id = req.params.id;
+  try {
+    const [result] = await pool.query("DELETE FROM students WHERE id = ?", [
+      id,
+    ]);
 
-  if (index === -1) {
-    return res.status(404).json({
-      error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลนักศึกษา" },
-    });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        error: { code: "NOT_FOUND", message: "ไม่พบข้อมูลนักศึกษา" },
+      });
+    }
+
+    res.status(200).json({ message: "ลบข้อมูลสำเร็จ" });
+  } catch (err) {
+    next(err);
   }
+});
 
-  students.splice(index, 1);
-  return res.status(200).json({ message: "ลบข้อมูลสำเร็จ" });
+// 7. POST /api/v1/students/:id/enrollments (ลงทะเบียนเรียนด้วย Transaction)
+app.post("/api/v1/students/:id/enrollments", async (req, res, next) => {
+  const studentId = req.params.id;
+  const { courseId } = req.body;
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [courseRows] = await connection.query(
+      "SELECT * FROM courses WHERE id = ? FOR UPDATE",
+      [courseId],
+    );
+
+    if (courseRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({
+        error: { code: "COURSE_NOT_FOUND", message: "ไม่พบรายวิชาที่ระบุ" },
+      });
+    }
+
+    if (courseRows[0].seat_available <= 0) {
+      await connection.rollback();
+      return res.status(409).json({
+        error: { code: "SEAT_FULL", message: "ที่นั่งเต็มแล้ว" },
+      });
+    }
+
+    await connection.query(
+      "INSERT INTO enrollments (student_id, course_id) VALUES (?, ?)",
+      [studentId, courseId],
+    );
+
+    await connection.query(
+      "UPDATE courses SET seat_available = seat_available - 1 WHERE id = ?",
+      [courseId],
+    );
+
+    await connection.commit();
+    res.status(201).json({ message: "ลงทะเบียนสำเร็จ" });
+  } catch (err) {
+    await connection.rollback();
+    if (err.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({
+        error: {
+          code: "ALREADY_ENROLLED",
+          message: "นักศึกษาลงทะเบียนรายวิชานี้ไปแล้ว",
+        },
+      });
+    }
+    next(err);
+  } finally {
+    connection.release();
+  }
 });
 
 // นำเข้าและตั้งค่า GraphQL
@@ -259,7 +337,10 @@ app.use((err, req, res, next) => {
   res.status(statusCode).json({
     error: {
       code: statusCode === 500 ? "INTERNAL_SERVER_ERROR" : err.type || "ERROR",
-      message: statusCode === 500 ? "เกิดข้อผิดพลาดที่ไม่คาดคิดภายในระบบ" : err.message,
+      message:
+        statusCode === 500
+          ? "เกิดข้อผิดพลาดที่ไม่คาดคิดภายในระบบ"
+          : err.message,
     },
   });
 });
@@ -267,4 +348,3 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Server กำลังทำงานที่พอร์ต ${PORT} (${process.env.NODE_ENV})`);
 });
-
