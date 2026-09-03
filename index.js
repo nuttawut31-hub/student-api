@@ -1,5 +1,6 @@
 require("dotenv").config();
 const pool = require("./db");
+const { redisClient, connectRedis } = require("./cache");
 
 const express = require("express");
 const helmet = require("helmet");
@@ -75,9 +76,21 @@ let courses = [
 
 // 1. GET /api/v1/students (ดึงรายการนักศึกษาทั้งหมด)
 app.get("/api/v1/students", async (req, res, next) => {
+  const cacheKey = "students:all";
+
   try {
+    const cached = await redisClient.get(cacheKey);
+    if (cached) {
+      return res.status(200).json({
+        message: "สำเร็จ (จาก cache)",
+        data: JSON.parse(cached),
+      });
+    }
+
     const [rows] = await pool.query("SELECT * FROM students");
-    res.status(200).json({ message: "สำเร็จ", data: rows });
+    await redisClient.set(cacheKey, JSON.stringify(rows), { EX: 60 });
+
+    res.status(200).json({ message: "สำเร็จ (จากฐานข้อมูล)", data: rows });
   } catch (err) {
     next(err);
   }
@@ -146,6 +159,9 @@ app.post("/api/v1/students", createStudentLimiter, async (req, res, next) => {
       "INSERT INTO students (name, major, email) VALUES (?, ?, ?)",
       [name, major, email],
     );
+
+    await redisClient.del("students:all"); // ล้างแคชเนื่องจากข้อมูลเปลี่ยนแปลงแล้ว
+
     res.status(201).json({
       message: "เพิ่มข้อมูลสำเร็จ",
       data: { id: result.insertId, name, major, email },
@@ -265,6 +281,7 @@ app.delete(
 );
 
 // 7. POST /api/v1/students/:id/enrollments (ลงทะเบียนเรียนด้วย Transaction)
+
 app.post("/api/v1/students/:id/enrollments", async (req, res, next) => {
   const studentId = req.params.id;
   const { courseId } = req.body;
@@ -569,7 +586,13 @@ app.use((err, req, res, next) => {
     },
   });
 });
-
-app.listen(PORT, () => {
-  console.log(`Server กำลังทำงานที่พอร์ต ${PORT} (${process.env.NODE_ENV})`);
-});
+connectRedis()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Server กำลังทำงานที่พอร์ต ${PORT} (${process.env.NODE_ENV})`);
+    });
+  })
+  .catch((err) => {
+    console.error("เชื่อมต่อ Redis ไม่สำเร็จ เซิร์ฟเวอร์จะไม่เริ่มทำงาน:", err);
+    process.exit(1);
+  });
